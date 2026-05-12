@@ -55,8 +55,9 @@ const clock = new THREE.Clock();
 
 function animate() {
   const elapsed = clock.getElapsedTime();
+  const scrollProgress = getScrollProgress();
 
-  form.rotation.x = Math.PI * 0.5 + elapsed * 0.34;
+  form.rotation.x = Math.PI * 0.5 + scrollProgress * Math.PI * 8;
   form.rotation.z = -0.08 + Math.sin(elapsed * 0.18) * 0.025;
   root.rotation.z = -0.18 + Math.sin(elapsed * 0.09) * 0.035;
   animateFormVertices(elapsed);
@@ -90,6 +91,19 @@ function resize() {
 
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
   renderer.setSize(width, height);
+}
+
+function getScrollProgress() {
+  const topSpacer = document.querySelector(".scroll-spacer");
+  const scrollStart = topSpacer ? topSpacer.offsetHeight : 0;
+  const scrollEnd = document.documentElement.scrollHeight - window.innerHeight;
+  const scrollableDistance = scrollEnd - scrollStart;
+
+  if (scrollableDistance <= 0) {
+    return 0;
+  }
+
+  return THREE.MathUtils.clamp((window.scrollY - scrollStart) / scrollableDistance, 0, 1);
 }
 
 function createTwistedTriangularForm() {
