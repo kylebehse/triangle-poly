@@ -37,8 +37,7 @@ const material = new THREE.MeshStandardMaterial({
 });
 
 const form = new THREE.Mesh(geometry, material);
-form.rotation.x = Math.PI * 0.5;
-form.rotation.z = -0.08;
+form.rotation.set(Math.PI * 0.5, -0.18, -0.08);
 root.add(form);
 
 const ambient = new THREE.AmbientLight(0xffffff, 0.01);
@@ -57,7 +56,7 @@ const clock = new THREE.Clock();
 function animate() {
   const elapsed = clock.getElapsedTime();
 
-  form.rotation.y = elapsed * 0.34;
+  form.rotation.x = Math.PI * 0.5 + elapsed * 0.34;
   form.rotation.z = -0.08 + Math.sin(elapsed * 0.18) * 0.025;
   root.rotation.z = -0.18 + Math.sin(elapsed * 0.09) * 0.035;
   animateFormVertices(elapsed);
@@ -95,17 +94,17 @@ function resize() {
 
 function createTwistedTriangularForm() {
   const radialSegments = 3;
-  const lengthSegments = 30;
-  const length = 24;
-  const twistTurns = 4.2;
+  const lengthSegments = 34;
+  const length = 30;
+  const twistTurns = 4.8;
   const vertices = [];
   const indices = [];
 
   for (let i = 0; i <= lengthSegments; i += 1) {
     const t = i / lengthSegments;
     const x = (t - 0.5) * length;
-    const taper = 1 - Math.pow(Math.abs(t - 0.5) * 1.45, 2);
-    const radius = 2.25 + Math.max(0, taper) * 0.72 + Math.sin(t * Math.PI * 8) * 0.12;
+    const taper = 1 - Math.pow(Math.abs(t - 0.5) * 1.35, 2);
+    const radius = 2.15 + Math.max(0, taper) * 0.72 + Math.sin(t * Math.PI * 9) * 0.08;
     const twist = t * Math.PI * 2 * twistTurns;
 
     for (let j = 0; j < radialSegments; j += 1) {
@@ -130,15 +129,63 @@ function createTwistedTriangularForm() {
       const c = nextRing + j;
       const d = nextRing + next;
 
-      indices.push(a, c, b);
-      indices.push(b, c, d);
+      pushOutwardFace(indices, vertices, a, b, c);
+      pushOutwardFace(indices, vertices, b, d, c);
     }
+  }
+
+  const startCenter = vertices.length / 3;
+  vertices.push(-length / 2, 0, 0);
+  const endCenter = vertices.length / 3;
+  vertices.push(length / 2, 0, 0);
+
+  for (let j = 0; j < radialSegments; j += 1) {
+    const next = (j + 1) % radialSegments;
+
+    pushOutwardFace(indices, vertices, startCenter, next, j);
+    pushOutwardFace(
+      indices,
+      vertices,
+      endCenter,
+      lengthSegments * radialSegments + j,
+      lengthSegments * radialSegments + next
+    );
   }
 
   const geometry = new THREE.BufferGeometry();
   geometry.setAttribute("position", new THREE.Float32BufferAttribute(vertices, 3));
   geometry.setIndex(indices);
   return geometry.toNonIndexed();
+}
+
+function pushOutwardFace(indices, vertices, a, b, c) {
+  const ax = vertices[a * 3];
+  const ay = vertices[a * 3 + 1];
+  const az = vertices[a * 3 + 2];
+  const bx = vertices[b * 3];
+  const by = vertices[b * 3 + 1];
+  const bz = vertices[b * 3 + 2];
+  const cx = vertices[c * 3];
+  const cy = vertices[c * 3 + 1];
+  const cz = vertices[c * 3 + 2];
+
+  const abx = bx - ax;
+  const aby = by - ay;
+  const abz = bz - az;
+  const acx = cx - ax;
+  const acy = cy - ay;
+  const acz = cz - az;
+  const normalY = abz * acx - abx * acz;
+  const normalZ = abx * acy - aby * acx;
+  const centerY = (ay + by + cy) / 3;
+  const centerZ = (az + bz + cz) / 3;
+
+  if (normalY * centerY + normalZ * centerZ < 0) {
+    indices.push(a, c, b);
+    return;
+  }
+
+  indices.push(a, b, c);
 }
 
 function animateFormVertices(elapsed) {
