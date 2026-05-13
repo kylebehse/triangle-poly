@@ -53,6 +53,10 @@ rimLight.position.set(6.4, -1.4, 2.2);
 scene.add(rimLight);
 
 const clock = new THREE.Clock();
+const pointerLight = {
+  current: new THREE.Vector2(0.26, 0.28),
+  target: new THREE.Vector2(0.26, 0.28),
+};
 
 function animate() {
   const elapsed = clock.getElapsedTime();
@@ -71,7 +75,7 @@ function animate() {
   camera.position.z = (narrowViewport ? 4.45 : 3.9) + Math.sin(cameraOrbit * 1.4) * 0.18;
   camera.lookAt(0.05, 0, 0.1);
 
-  updateScrollLighting(scrollProgress, elapsed);
+  updatePointerLighting(elapsed);
 
   formPosition.needsUpdate = true;
   geometry.computeVertexNormals();
@@ -217,23 +221,61 @@ function animateFormVertices(elapsed) {
   }
 }
 
-function updateScrollLighting(scrollProgress, elapsed) {
-  const sweep = scrollProgress * Math.PI * 1.6 - Math.PI * 0.35;
-  const shimmer = Math.sin(elapsed * 0.32) * 0.18;
+function updatePointerLighting(elapsed) {
+  pointerLight.current.lerp(pointerLight.target, 0.12);
+
+  const x = (pointerLight.current.x - 0.5) * 2;
+  const y = (0.5 - pointerLight.current.y) * 2;
+  const shimmer = Math.sin(elapsed * 0.32) * 0.12;
 
   keyLight.position.set(
-    Math.cos(sweep) * 7.8,
-    -6.2 + Math.sin(sweep * 0.75) * 1.1,
-    4.9 + Math.sin(sweep + shimmer) * 2.0
+    x * 8.2,
+    -6.4,
+    4.7 + y * 2.4 + shimmer
   );
 
   rimLight.position.set(
-    Math.cos(sweep + Math.PI * 0.78) * 6.8,
-    -0.9 + Math.sin(sweep) * 1.4,
-    2.0 + Math.cos(sweep * 0.8) * 1.15
+    x * -5.8,
+    -1.2,
+    2.1 + y * -1.4
+  );
+}
+
+function updatePointerTarget(clientX, clientY) {
+  pointerLight.target.set(
+    THREE.MathUtils.clamp(clientX / window.innerWidth, 0, 1),
+    THREE.MathUtils.clamp(clientY / window.innerHeight, 0, 1)
   );
 }
 
 window.addEventListener("resize", resize);
+window.addEventListener("pointermove", (event) => {
+  updatePointerTarget(event.clientX, event.clientY);
+});
+
+window.addEventListener(
+  "touchstart",
+  (event) => {
+    const touch = event.touches[0];
+
+    if (touch) {
+      updatePointerTarget(touch.clientX, touch.clientY);
+    }
+  },
+  { passive: true }
+);
+
+window.addEventListener(
+  "touchmove",
+  (event) => {
+    const touch = event.touches[0];
+
+    if (touch) {
+      updatePointerTarget(touch.clientX, touch.clientY);
+    }
+  },
+  { passive: true }
+);
+
 resize();
 animate();
