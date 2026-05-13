@@ -52,6 +52,10 @@ const sunLight = new THREE.DirectionalLight(0xffffff, keyLight.intensity / 3);
 sunLight.position.set(6.4, 5.8, 8.2);
 scene.add(sunLight);
 
+const underLight = new THREE.DirectionalLight(0xffffff, keyLight.intensity / 8);
+underLight.position.set(-5.8, 4.8, -4.2);
+scene.add(underLight);
+
 const rimLight = new THREE.DirectionalLight(0xffffff, 3.2);
 rimLight.position.set(6.4, -1.4, 2.2);
 scene.add(rimLight);
@@ -248,6 +252,12 @@ function updatePointerLighting(elapsed) {
     x * -6.8,
     5.8,
     8.4 + y * 1.8
+  );
+
+  underLight.position.set(
+    x * 5.2,
+    4.6,
+    -4.4 + y * -1.2
   );
 }
 
