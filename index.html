@@ -5,11 +5,15 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Triangle Poly</title>
     <link rel="icon" href="data:," />
-    <link rel="stylesheet" href="styles.css" />
+    <link rel="stylesheet" href="styles.css?v=scroll-scene" />
   </head>
   <body>
     <div class="scroll-spacer" aria-hidden="true"></div>
-    <canvas id="triangle-poly" aria-label="Scroll controlled faceted twisting form"></canvas>
+    <section class="screw-scene" aria-label="Scroll controlled faceted twisting form">
+      <div class="sticky-frame">
+        <canvas id="triangle-poly"></canvas>
+      </div>
+    </section>
     <div class="scroll-spacer" aria-hidden="true"></div>
 
     <script type="importmap">
@@ -19,6 +23,6 @@
         }
       }
     </script>
-    <script type="module" src="scripts.js"></script>
+    <script type="module" src="scripts.js?v=scroll-scene"></script>
   </body>
 </html>

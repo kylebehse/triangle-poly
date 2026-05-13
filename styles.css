@@ -7,21 +7,40 @@ body {
   width: 100%;
   margin: 0;
   background: #050505;
+  scrollbar-width: none;
 }
 
 body {
   min-height: 100vh;
+  scrollbar-width: none;
+}
+
+body::-webkit-scrollbar {
+  display: none;
+}
+
+html::-webkit-scrollbar {
+  display: none;
 }
 
 .scroll-spacer {
   height: 150vh;
 }
 
-#triangle-poly {
+.screw-scene {
+  height: 250vh;
+}
+
+.sticky-frame {
   position: sticky;
   top: 0;
+  width: 100%;
+  height: 100vh;
+}
+
+#triangle-poly {
   display: block;
-  width: 100vw;
+  width: 100%;
   height: 100vh;
   background: #050505;
 }
