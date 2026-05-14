@@ -8,6 +8,7 @@ const screwScene = document.querySelector(".screw-scene") || canvas.parentElemen
 const stickyFrame = document.querySelector(".sticky-frame");
 const horizonGuard = document.querySelector(".horizon-guard");
 const secondaryHorizonGuard = document.querySelector(".horizon-guard-secondary");
+let lastHorizonGuardSignature = "";
 const scene = new THREE.Scene();
 scene.background = null;
 scene.fog = new THREE.FogExp2(0x050505, 0.035);
@@ -96,7 +97,7 @@ function animate() {
   camera.lookAt(0.05, 0, 0.1);
 
   updatePointerLighting(elapsed);
-  updateHorizonGuard(scrollProgress, elapsed);
+  updateHorizonGuard(scrollProgress);
 
   formPosition.needsUpdate = true;
   geometry.computeVertexNormals();
@@ -274,11 +275,19 @@ function updatePointerLighting(elapsed) {
   );
 }
 
-function updateHorizonGuard(scrollProgress, elapsed) {
+function updateHorizonGuard(scrollProgress) {
   const narrowViewport = window.innerWidth < 700;
+  const scrollPhase = Number(scrollProgress.toFixed(4));
+  const signature = `${scrollPhase}-${narrowViewport ? "narrow" : "wide"}`;
+
+  if (signature === lastHorizonGuardSignature) {
+    return;
+  }
+
+  lastHorizonGuardSignature = signature;
 
   updateHorizonGuardLayer(horizonGuard, {
-    phase: scrollProgress * Math.PI * 7.25 + elapsed * 0.08,
+    phase: scrollPhase * Math.PI * 7.25,
     topBase: narrowViewport ? 52 : 51,
     bottomBase: narrowViewport ? 61.5 : 61,
     topAmp: narrowViewport ? 1.9 : 2.8,
@@ -295,15 +304,15 @@ function updateHorizonGuard(scrollProgress, elapsed) {
   });
 
   updateHorizonGuardLayer(secondaryHorizonGuard, {
-    phase: scrollProgress * Math.PI * 5.6 + elapsed * 0.13 + Math.PI * 0.72,
-    topBase: narrowViewport ? 53.5 : 52.4,
-    bottomBase: narrowViewport ? 63.5 : 62.6,
-    topAmp: narrowViewport ? 2.5 : 3.6,
-    bottomAmp: narrowViewport ? 1.8 : 2.7,
-    xShift: narrowViewport ? 2.4 : 3.4,
-    yShift: narrowViewport ? 1.1 : 1.45,
-    skew: narrowViewport ? 1.8 : 2.7,
-    opacityBase: 0.42,
+    phase: scrollPhase * Math.PI * 5.6 + Math.PI * 0.72,
+    topBase: narrowViewport ? 59.5 : 57.4,
+    bottomBase: narrowViewport ? 71.5 : 69.2,
+    topAmp: narrowViewport ? 2.9 : 4.1,
+    bottomAmp: narrowViewport ? 2.1 : 3.0,
+    xShift: narrowViewport ? 4.8 : 6.4,
+    yShift: narrowViewport ? 3.4 : 4.2,
+    skew: narrowViewport ? 2.4 : 3.6,
+    opacityBase: 0.36,
     opacityAmp: 0.06,
     topStep: 1.18,
     bottomStep: 0.66,
