@@ -1,10 +1,20 @@
 import * as THREE from "three";
 
+let topBackground = "#14a762";
+let bottomBackground = "#d44747";
+
 const canvas = document.querySelector("#triangle-poly");
 const screwScene = document.querySelector(".screw-scene") || canvas.parentElement;
+const stickyFrame = document.querySelector(".sticky-frame");
+const horizonGuard = document.querySelector(".horizon-guard");
 const scene = new THREE.Scene();
-scene.background = new THREE.Color(0x050505);
+scene.background = null;
 scene.fog = new THREE.FogExp2(0x050505, 0.035);
+
+if (stickyFrame) {
+  stickyFrame.style.setProperty("--top-background", topBackground);
+  stickyFrame.style.setProperty("--bottom-background", bottomBackground);
+}
 
 const camera = new THREE.PerspectiveCamera(36, window.innerWidth / window.innerHeight, 0.1, 90);
 camera.position.set(0, -12, 3.2);
@@ -12,11 +22,12 @@ camera.position.set(0, -12, 3.2);
 const renderer = new THREE.WebGLRenderer({
   canvas,
   antialias: true,
-  alpha: false,
+  alpha: true,
   powerPreference: "high-performance",
 });
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.setClearColor(0x000000, 0);
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 1.8;
@@ -84,6 +95,7 @@ function animate() {
   camera.lookAt(0.05, 0, 0.1);
 
   updatePointerLighting(elapsed);
+  updateHorizonGuard(scrollProgress, elapsed);
 
   formPosition.needsUpdate = true;
   geometry.computeVertexNormals();
@@ -259,6 +271,42 @@ function updatePointerLighting(elapsed) {
     4.6,
     -4.4 + y * -1.2
   );
+}
+
+function updateHorizonGuard(scrollProgress, elapsed) {
+  if (!horizonGuard) {
+    return;
+  }
+
+  const narrowViewport = window.innerWidth < 700;
+  const phase = scrollProgress * Math.PI * 7.25 + elapsed * 0.08;
+  const topBase = narrowViewport ? 52 : 51;
+  const bottomBase = narrowViewport ? 61.5 : 61;
+  const topAmp = narrowViewport ? 1.9 : 2.8;
+  const bottomAmp = narrowViewport ? 2.3 : 3.3;
+  const topPoints = [0, 8, 18, 28, 41, 53, 66, 79, 91, 100];
+  const bottomPoints = [100, 91, 80, 67, 54, 42, 29, 18, 7, 0];
+
+  const topEdge = topPoints.map((x, index) => {
+    const wave = Math.sin(phase + index * 0.9) * topAmp;
+    const counterWave = Math.sin(phase * 0.43 - index * 1.35) * 0.75;
+    return `${x}% ${(topBase + wave + counterWave).toFixed(2)}%`;
+  });
+
+  const bottomEdge = bottomPoints.map((x, index) => {
+    const wave = Math.sin(phase + index * 0.82 + Math.PI * 0.7) * bottomAmp;
+    const counterWave = Math.sin(phase * 0.5 + index * 1.1) * 0.9;
+    return `${x}% ${(bottomBase + wave + counterWave).toFixed(2)}%`;
+  });
+
+  const shiftX = Math.sin(phase * 0.45) * (narrowViewport ? 1.4 : 2.2);
+  const shiftY = Math.cos(phase * 0.35) * (narrowViewport ? 0.6 : 0.9);
+  const skew = Math.sin(phase * 0.28) * (narrowViewport ? 1.1 : 1.8);
+  const opacity = 0.7 + Math.sin(phase * 0.32) * 0.04;
+
+  horizonGuard.style.clipPath = `polygon(${[...topEdge, ...bottomEdge].join(", ")})`;
+  horizonGuard.style.transform = `translate3d(${shiftX.toFixed(2)}vw, ${shiftY.toFixed(2)}vh, 0) skewX(${skew.toFixed(2)}deg)`;
+  horizonGuard.style.opacity = opacity.toFixed(2);
 }
 
 function updatePointerTarget(clientX, clientY) {
