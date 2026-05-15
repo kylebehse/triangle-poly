@@ -339,9 +339,17 @@ const formAxisCenter = new THREE.Vector3(0, 0, 0);
 const projectedStart = new THREE.Vector3();
 const projectedEnd = new THREE.Vector3();
 const projectedCenter = new THREE.Vector3();
+const horizonSample = new THREE.Vector3();
+const horizonFitBinCount = 18;
+const horizonFitBins = Array.from({ length: horizonFitBinCount }, () => ({
+  x: 0,
+  bottom: Number.NEGATIVE_INFINITY,
+  active: false,
+}));
 
 function updateHorizonShield() {
   const uniforms = horizonShield.material.uniforms;
+  const colorUniforms = colorSilhouette.material.uniforms;
   root.updateMatrixWorld(true);
   form.updateMatrixWorld(true);
   camera.updateMatrixWorld(true);
@@ -361,8 +369,86 @@ function updateHorizonShield() {
   }
 
   uniforms.splitCenter.value = THREE.MathUtils.clamp((1 - projectedCenter.y) * 0.5, 0.18, 0.82);
-  colorSilhouette.material.uniforms.splitSlope.value = uniforms.splitSlope.value;
-  colorSilhouette.material.uniforms.splitCenter.value = uniforms.splitCenter.value;
+
+  fitHorizonToLowerSilhouette(uniforms);
+  colorUniforms.splitSlope.value = uniforms.splitSlope.value;
+  colorUniforms.splitCenter.value = uniforms.splitCenter.value;
+}
+
+function fitHorizonToLowerSilhouette(uniforms) {
+  const positions = formPosition.array;
+
+  for (const bin of horizonFitBins) {
+    bin.bottom = Number.NEGATIVE_INFINITY;
+    bin.active = false;
+  }
+
+  for (let i = 0; i < positions.length; i += 3) {
+    horizonSample
+      .set(positions[i], positions[i + 1], positions[i + 2])
+      .applyMatrix4(form.matrixWorld)
+      .project(camera);
+
+    if (horizonSample.z < -1 || horizonSample.z > 1) {
+      continue;
+    }
+
+    const screenX = (horizonSample.x + 1) * 0.5;
+    const screenY = (1 - horizonSample.y) * 0.5;
+
+    if (screenX < -0.08 || screenX > 1.08 || screenY < -0.08 || screenY > 1.08) {
+      continue;
+    }
+
+    const binIndex = THREE.MathUtils.clamp(
+      Math.floor(screenX * horizonFitBinCount),
+      0,
+      horizonFitBinCount - 1
+    );
+    const bin = horizonFitBins[binIndex];
+
+    if (screenY > bin.bottom) {
+      bin.x = screenX;
+      bin.bottom = screenY;
+      bin.active = true;
+    }
+  }
+
+  const activeBins = horizonFitBins.filter((bin) => bin.active);
+
+  if (activeBins.length < 3) {
+    return;
+  }
+
+  let sumX = 0;
+  let sumY = 0;
+
+  for (const bin of activeBins) {
+    sumX += bin.x;
+    sumY += bin.bottom;
+  }
+
+  const meanX = sumX / activeBins.length;
+  const meanY = sumY / activeBins.length;
+  let numerator = 0;
+  let denominator = 0;
+
+  for (const bin of activeBins) {
+    const xDelta = bin.x - meanX;
+    numerator += xDelta * (bin.bottom - meanY);
+    denominator += xDelta * xDelta;
+  }
+
+  if (denominator < 0.0001) {
+    return;
+  }
+
+  const slope = THREE.MathUtils.clamp(numerator / denominator, -1.2, 1.2);
+  const center = meanY - slope * (meanX - 0.5);
+  const silhouetteInset = window.innerWidth < 700 ? 0.016 : 0.012;
+
+  uniforms.splitSlope.value = slope;
+  uniforms.splitCenter.value = THREE.MathUtils.clamp(center - silhouetteInset, 0.18, 0.82);
 }
 
 function parseCssHexColor(hexColor) {
