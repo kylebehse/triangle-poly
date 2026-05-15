@@ -53,8 +53,10 @@ const form = new THREE.Mesh(geometry, material);
 form.rotation.set(Math.PI * 0.5, -0.22, 0.02);
 form.renderOrder = 2;
 const horizonShield = createHorizonShield();
+const colorSilhouette = createColorSilhouette();
 const formSilhouette = createFormSilhouette();
 root.add(horizonShield);
+root.add(colorSilhouette);
 root.add(formSilhouette);
 root.add(form);
 
@@ -90,6 +92,7 @@ function animate() {
   form.rotation.x = Math.PI * 0.5 + scrollProgress * Math.PI * 7.25;
   const screwWobble = Math.sin(elapsed * 0.14) * 0.012;
   form.rotation.z = 0.02 + screwWobble;
+  colorSilhouette.rotation.copy(form.rotation);
   formSilhouette.rotation.copy(form.rotation);
   root.rotation.z = -0.38 + Math.sin(elapsed * 0.08) * 0.018;
   animateFormVertices(elapsed);
@@ -124,6 +127,7 @@ function resize() {
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
   renderer.setSize(width, height);
   horizonShield.material.uniforms.resolution.value.set(width, height);
+  colorSilhouette.material.uniforms.resolution.value.set(width, height);
 }
 
 function getScrollProgress() {
@@ -286,6 +290,49 @@ function createFormSilhouette() {
   return silhouette;
 }
 
+function createColorSilhouette() {
+  const material = new THREE.ShaderMaterial({
+    side: THREE.BackSide,
+    depthWrite: false,
+    toneMapped: false,
+    uniforms: {
+      topColor: { value: parseCssHexColor(topBackground) },
+      bottomColor: { value: parseCssHexColor(bottomBackground) },
+      resolution: { value: new THREE.Vector2(window.innerWidth, window.innerHeight) },
+      splitSlope: { value: 0 },
+      splitCenter: { value: 0.5 },
+    },
+    vertexShader: `
+      void main() {
+        gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+      }
+    `,
+    fragmentShader: `
+      uniform vec3 topColor;
+      uniform vec3 bottomColor;
+      uniform vec2 resolution;
+      uniform float splitSlope;
+      uniform float splitCenter;
+
+      void main() {
+        vec2 screenUv = gl_FragCoord.xy / resolution;
+        float yFromTop = 1.0 - screenUv.y;
+        float splitLine = splitCenter + splitSlope * (screenUv.x - 0.5);
+        vec3 splitColor = yFromTop < splitLine ? topColor : bottomColor;
+        vec3 accentColor = mix(splitColor, vec3(0.0), 0.24);
+
+        gl_FragColor = vec4(accentColor, 1.0);
+      }
+    `,
+  });
+  const silhouette = new THREE.Mesh(geometry, material);
+
+  silhouette.rotation.copy(form.rotation);
+  silhouette.scale.set(1.045, 1.28, 1.28);
+  silhouette.renderOrder = 0;
+  return silhouette;
+}
+
 const formAxisStart = new THREE.Vector3(-formLength / 2, 0, 0);
 const formAxisEnd = new THREE.Vector3(formLength / 2, 0, 0);
 const formAxisCenter = new THREE.Vector3(0, 0, 0);
@@ -314,6 +361,8 @@ function updateHorizonShield() {
   }
 
   uniforms.splitCenter.value = THREE.MathUtils.clamp((1 - projectedCenter.y) * 0.5, 0.18, 0.82);
+  colorSilhouette.material.uniforms.splitSlope.value = uniforms.splitSlope.value;
+  colorSilhouette.material.uniforms.splitCenter.value = uniforms.splitCenter.value;
 }
 
 function parseCssHexColor(hexColor) {
