@@ -2,6 +2,8 @@ import * as THREE from "three";
 
 let topBackground = "#14a762";
 let bottomBackground = "#d44747";
+const lengthMultiplier = 3;
+const formLength = 34 * lengthMultiplier;
 
 const canvas = document.querySelector("#triangle-poly");
 const screwScene = document.querySelector(".screw-scene") || canvas.parentElement;
@@ -49,8 +51,11 @@ const material = new THREE.MeshStandardMaterial({
 
 const form = new THREE.Mesh(geometry, material);
 form.rotation.set(Math.PI * 0.5, -0.22, 0.02);
+form.renderOrder = 2;
 const horizonShield = createHorizonShield();
+const formSilhouette = createFormSilhouette();
 root.add(horizonShield);
+root.add(formSilhouette);
 root.add(form);
 
 const ambient = new THREE.AmbientLight(0xffffff, 0.006);
@@ -85,17 +90,20 @@ function animate() {
   form.rotation.x = Math.PI * 0.5 + scrollProgress * Math.PI * 7.25;
   const screwWobble = Math.sin(elapsed * 0.14) * 0.012;
   form.rotation.z = 0.02 + screwWobble;
+  formSilhouette.rotation.copy(form.rotation);
   root.rotation.z = -0.38 + Math.sin(elapsed * 0.08) * 0.018;
-  updateHorizonShield(scrollProgress, screwWobble);
   animateFormVertices(elapsed);
 
   const narrowViewport = window.innerWidth < 700;
   const cameraOrbit = elapsed * 0.06;
-  root.scale.setScalar(narrowViewport ? 0.62 : 0.82);
+  const baseScale = narrowViewport ? 0.62 : 0.82;
+  const exitScale = THREE.MathUtils.lerp(1, 0.5, scrollProgress);
+  root.scale.setScalar(baseScale * exitScale);
   camera.position.x = Math.sin(cameraOrbit) * 0.4;
   camera.position.y = narrowViewport ? -17.2 : -15.8;
   camera.position.z = (narrowViewport ? 4.45 : 3.9) + Math.sin(cameraOrbit * 1.4) * 0.18;
   camera.lookAt(0.05, 0, 0.1);
+  updateHorizonShield();
 
   updatePointerLighting(elapsed);
 
@@ -115,6 +123,7 @@ function resize() {
 
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
   renderer.setSize(width, height);
+  horizonShield.material.uniforms.resolution.value.set(width, height);
 }
 
 function getScrollProgress() {
@@ -132,9 +141,9 @@ function getScrollProgress() {
 
 function createTwistedTriangularForm() {
   const radialSegments = 3;
-  const lengthSegments = 14;
-  const length = 34;
-  const twistTurns = 3.35;
+  const lengthSegments = 14 * lengthMultiplier;
+  const length = formLength;
+  const twistTurns = 3.35 * lengthMultiplier;
   const vertices = [];
   const indices = [];
 
@@ -142,7 +151,7 @@ function createTwistedTriangularForm() {
     const t = i / lengthSegments;
     const x = (t - 0.5) * length;
     const taper = 1 - Math.pow(Math.abs(t - 0.5) * 1.18, 2);
-    const radius = 2.45 + Math.max(0, taper) * 0.95 + Math.sin(t * Math.PI * 5) * 0.14;
+    const radius = 2.45 + Math.max(0, taper) * 0.95 + Math.sin(t * Math.PI * 5 * lengthMultiplier) * 0.14;
     const twist = t * Math.PI * 2 * twistTurns;
 
     for (let j = 0; j < radialSegments; j += 1) {
@@ -197,8 +206,8 @@ function createTwistedTriangularForm() {
 }
 
 function createHorizonShield() {
-  const width = 92;
-  const height = 15;
+  const width = 276;
+  const height = 24;
   const distanceBehindForm = 7.2;
   const geometry = new THREE.BufferGeometry();
   const positions = new Float32Array([
@@ -226,8 +235,9 @@ function createHorizonShield() {
     uniforms: {
       topColor: { value: parseCssHexColor(topBackground) },
       bottomColor: { value: parseCssHexColor(bottomBackground) },
-      splitTilt: { value: 0 },
-      splitOffset: { value: 0 },
+      resolution: { value: new THREE.Vector2(window.innerWidth, window.innerHeight) },
+      splitSlope: { value: 0 },
+      splitCenter: { value: 0.5 },
     },
     vertexShader: `
       varying vec2 vUv;
@@ -240,13 +250,15 @@ function createHorizonShield() {
     fragmentShader: `
       uniform vec3 topColor;
       uniform vec3 bottomColor;
-      uniform float splitTilt;
-      uniform float splitOffset;
+      uniform vec2 resolution;
+      uniform float splitSlope;
+      uniform float splitCenter;
       varying vec2 vUv;
 
       void main() {
-        float yFromTop = 1.0 - vUv.y;
-        float splitLine = 0.5 + splitOffset + splitTilt * (vUv.x - 0.5);
+        vec2 screenUv = gl_FragCoord.xy / resolution;
+        float yFromTop = 1.0 - screenUv.y;
+        float splitLine = splitCenter + splitSlope * (screenUv.x - 0.5);
         vec3 splitColor = yFromTop < splitLine ? topColor : bottomColor;
 
         gl_FragColor = vec4(splitColor, 1.0);
@@ -259,12 +271,49 @@ function createHorizonShield() {
   return shield;
 }
 
-function updateHorizonShield(scrollProgress, screwWobble) {
-  const uniforms = horizonShield.material.uniforms;
-  const screwPhase = scrollProgress * Math.PI * 7.25;
+function createFormSilhouette() {
+  const material = new THREE.MeshBasicMaterial({
+    color: 0x050505,
+    side: THREE.BackSide,
+    depthWrite: false,
+    toneMapped: false,
+  });
+  const silhouette = new THREE.Mesh(geometry, material);
 
-  uniforms.splitTilt.value = Math.sin(screwPhase) * 0.11 + screwWobble * 3.5;
-  uniforms.splitOffset.value = Math.cos(screwPhase * 0.72) * 0.018;
+  silhouette.rotation.copy(form.rotation);
+  silhouette.scale.set(1.012, 1.065, 1.065);
+  silhouette.renderOrder = 1;
+  return silhouette;
+}
+
+const formAxisStart = new THREE.Vector3(-formLength / 2, 0, 0);
+const formAxisEnd = new THREE.Vector3(formLength / 2, 0, 0);
+const formAxisCenter = new THREE.Vector3(0, 0, 0);
+const projectedStart = new THREE.Vector3();
+const projectedEnd = new THREE.Vector3();
+const projectedCenter = new THREE.Vector3();
+
+function updateHorizonShield() {
+  const uniforms = horizonShield.material.uniforms;
+  root.updateMatrixWorld(true);
+  form.updateMatrixWorld(true);
+  camera.updateMatrixWorld(true);
+
+  projectedStart.copy(formAxisStart).applyMatrix4(form.matrixWorld).project(camera);
+  projectedEnd.copy(formAxisEnd).applyMatrix4(form.matrixWorld).project(camera);
+  projectedCenter.copy(formAxisCenter).applyMatrix4(form.matrixWorld).project(camera);
+
+  const startX = (projectedStart.x + 1) * 0.5;
+  const startY = (1 - projectedStart.y) * 0.5;
+  const endX = (projectedEnd.x + 1) * 0.5;
+  const endY = (1 - projectedEnd.y) * 0.5;
+  const dx = endX - startX;
+
+  if (Math.abs(dx) > 0.001) {
+    uniforms.splitSlope.value = THREE.MathUtils.clamp((endY - startY) / dx, -1.2, 1.2);
+  }
+
+  uniforms.splitCenter.value = THREE.MathUtils.clamp((1 - projectedCenter.y) * 0.5, 0.18, 0.82);
 }
 
 function parseCssHexColor(hexColor) {
