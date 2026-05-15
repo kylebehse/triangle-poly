@@ -6,9 +6,6 @@ let bottomBackground = "#d44747";
 const canvas = document.querySelector("#triangle-poly");
 const screwScene = document.querySelector(".screw-scene") || canvas.parentElement;
 const stickyFrame = document.querySelector(".sticky-frame");
-const horizonGuard = document.querySelector(".horizon-guard");
-const secondaryHorizonGuard = document.querySelector(".horizon-guard-secondary");
-let lastHorizonGuardSignature = "";
 const scene = new THREE.Scene();
 scene.background = null;
 scene.fog = new THREE.FogExp2(0x050505, 0.035);
@@ -52,6 +49,8 @@ const material = new THREE.MeshStandardMaterial({
 
 const form = new THREE.Mesh(geometry, material);
 form.rotation.set(Math.PI * 0.5, -0.22, 0.02);
+const horizonShield = createHorizonShield();
+root.add(horizonShield);
 root.add(form);
 
 const ambient = new THREE.AmbientLight(0xffffff, 0.006);
@@ -84,8 +83,10 @@ function animate() {
   const scrollProgress = getScrollProgress();
 
   form.rotation.x = Math.PI * 0.5 + scrollProgress * Math.PI * 7.25;
-  form.rotation.z = 0.02 + Math.sin(elapsed * 0.14) * 0.012;
+  const screwWobble = Math.sin(elapsed * 0.14) * 0.012;
+  form.rotation.z = 0.02 + screwWobble;
   root.rotation.z = -0.38 + Math.sin(elapsed * 0.08) * 0.018;
+  updateHorizonShield(scrollProgress, screwWobble);
   animateFormVertices(elapsed);
 
   const narrowViewport = window.innerWidth < 700;
@@ -97,7 +98,6 @@ function animate() {
   camera.lookAt(0.05, 0, 0.1);
 
   updatePointerLighting(elapsed);
-  updateHorizonGuard(scrollProgress);
 
   formPosition.needsUpdate = true;
   geometry.computeVertexNormals();
@@ -196,6 +196,88 @@ function createTwistedTriangularForm() {
   return geometry.toNonIndexed();
 }
 
+function createHorizonShield() {
+  const width = 39;
+  const height = 7.2;
+  const distanceBehindForm = 7.2;
+  const geometry = new THREE.BufferGeometry();
+  const positions = new Float32Array([
+    -width / 2, distanceBehindForm, -height / 2,
+    width / 2, distanceBehindForm, -height / 2,
+    -width / 2, distanceBehindForm, height / 2,
+    width / 2, distanceBehindForm, height / 2,
+  ]);
+  const uvs = new Float32Array([
+    0, 0,
+    1, 0,
+    0, 1,
+    1, 1,
+  ]);
+
+  geometry.setAttribute("position", new THREE.BufferAttribute(positions, 3));
+  geometry.setAttribute("uv", new THREE.BufferAttribute(uvs, 2));
+  geometry.setIndex([0, 1, 2, 2, 1, 3]);
+
+  const material = new THREE.ShaderMaterial({
+    transparent: false,
+    depthWrite: false,
+    depthTest: true,
+    toneMapped: false,
+    uniforms: {
+      topColor: { value: parseCssHexColor(topBackground) },
+      bottomColor: { value: parseCssHexColor(bottomBackground) },
+      splitTilt: { value: 0 },
+      splitOffset: { value: 0 },
+    },
+    vertexShader: `
+      varying vec2 vUv;
+
+      void main() {
+        vUv = uv;
+        gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+      }
+    `,
+    fragmentShader: `
+      uniform vec3 topColor;
+      uniform vec3 bottomColor;
+      uniform float splitTilt;
+      uniform float splitOffset;
+      varying vec2 vUv;
+
+      void main() {
+        float yFromTop = 1.0 - vUv.y;
+        float splitLine = 0.5 + splitOffset + splitTilt * (vUv.x - 0.5);
+        vec3 splitColor = yFromTop < splitLine ? topColor : bottomColor;
+
+        gl_FragColor = vec4(splitColor, 1.0);
+      }
+    `,
+  });
+
+  const shield = new THREE.Mesh(geometry, material);
+  shield.renderOrder = -1;
+  return shield;
+}
+
+function updateHorizonShield(scrollProgress, screwWobble) {
+  const uniforms = horizonShield.material.uniforms;
+  const screwPhase = scrollProgress * Math.PI * 7.25;
+
+  uniforms.splitTilt.value = Math.sin(screwPhase) * 0.11 + screwWobble * 3.5;
+  uniforms.splitOffset.value = Math.cos(screwPhase * 0.72) * 0.018;
+}
+
+function parseCssHexColor(hexColor) {
+  const value = hexColor.replace("#", "");
+  const colorNumber = Number.parseInt(value, 16);
+
+  return new THREE.Vector3(
+    ((colorNumber >> 16) & 255) / 255,
+    ((colorNumber >> 8) & 255) / 255,
+    (colorNumber & 255) / 255
+  );
+}
+
 function pushOutwardFace(indices, vertices, a, b, c) {
   const ax = vertices[a * 3];
   const ay = vertices[a * 3 + 1];
@@ -273,82 +355,6 @@ function updatePointerLighting(elapsed) {
     4.6,
     -4.4 + y * -1.2
   );
-}
-
-function updateHorizonGuard(scrollProgress) {
-  const narrowViewport = window.innerWidth < 700;
-  const scrollPhase = Number(scrollProgress.toFixed(4));
-  const signature = `${scrollPhase}-${narrowViewport ? "narrow" : "wide"}`;
-
-  if (signature === lastHorizonGuardSignature) {
-    return;
-  }
-
-  lastHorizonGuardSignature = signature;
-
-  updateHorizonGuardLayer(horizonGuard, {
-    phase: scrollPhase * Math.PI * 7.25,
-    topBase: narrowViewport ? 52 : 51,
-    bottomBase: narrowViewport ? 61.5 : 61,
-    topAmp: narrowViewport ? 1.9 : 2.8,
-    bottomAmp: narrowViewport ? 2.3 : 3.3,
-    xShift: narrowViewport ? 1.4 : 2.2,
-    yShift: narrowViewport ? 0.6 : 0.9,
-    skew: narrowViewport ? 1.1 : 1.8,
-    opacityBase: 0.7,
-    opacityAmp: 0.04,
-    topStep: 0.9,
-    bottomStep: 0.82,
-    counterTopStep: 1.35,
-    counterBottomStep: 1.1,
-  });
-
-  updateHorizonGuardLayer(secondaryHorizonGuard, {
-    phase: scrollPhase * Math.PI * 5.6 + Math.PI * 0.72,
-    topBase: narrowViewport ? 59.5 : 57.4,
-    bottomBase: narrowViewport ? 71.5 : 69.2,
-    topAmp: narrowViewport ? 2.9 : 4.1,
-    bottomAmp: narrowViewport ? 2.1 : 3.0,
-    xShift: narrowViewport ? 4.8 : 6.4,
-    yShift: narrowViewport ? 3.4 : 4.2,
-    skew: narrowViewport ? 2.4 : 3.6,
-    opacityBase: 0.36,
-    opacityAmp: 0.06,
-    topStep: 1.18,
-    bottomStep: 0.66,
-    counterTopStep: 0.82,
-    counterBottomStep: 1.5,
-  });
-}
-
-function updateHorizonGuardLayer(guard, settings) {
-  if (!guard) {
-    return;
-  }
-
-  const topPoints = [0, 8, 18, 28, 41, 53, 66, 79, 91, 100];
-  const bottomPoints = [100, 91, 80, 67, 54, 42, 29, 18, 7, 0];
-
-  const topEdge = topPoints.map((x, index) => {
-    const wave = Math.sin(settings.phase + index * settings.topStep) * settings.topAmp;
-    const counterWave = Math.sin(settings.phase * 0.43 - index * settings.counterTopStep) * 0.75;
-    return `${x}% ${(settings.topBase + wave + counterWave).toFixed(2)}%`;
-  });
-
-  const bottomEdge = bottomPoints.map((x, index) => {
-    const wave = Math.sin(settings.phase + index * settings.bottomStep + Math.PI * 0.7) * settings.bottomAmp;
-    const counterWave = Math.sin(settings.phase * 0.5 + index * settings.counterBottomStep) * 0.9;
-    return `${x}% ${(settings.bottomBase + wave + counterWave).toFixed(2)}%`;
-  });
-
-  const shiftX = Math.sin(settings.phase * 0.45) * settings.xShift;
-  const shiftY = Math.cos(settings.phase * 0.35) * settings.yShift;
-  const skew = Math.sin(settings.phase * 0.28) * settings.skew;
-  const opacity = settings.opacityBase + Math.sin(settings.phase * 0.32) * settings.opacityAmp;
-
-  guard.style.clipPath = `polygon(${[...topEdge, ...bottomEdge].join(", ")})`;
-  guard.style.transform = `translate3d(${shiftX.toFixed(2)}vw, ${shiftY.toFixed(2)}vh, 0) skewX(${skew.toFixed(2)}deg)`;
-  guard.style.opacity = opacity.toFixed(2);
 }
 
 function updatePointerTarget(clientX, clientY) {
