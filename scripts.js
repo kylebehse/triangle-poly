@@ -197,8 +197,8 @@ function createTwistedTriangularForm() {
 }
 
 function createHorizonShield() {
-  const width = 39;
-  const height = 7.2;
+  const width = 92;
+  const height = 15;
   const distanceBehindForm = 7.2;
   const geometry = new THREE.BufferGeometry();
   const positions = new Float32Array([
