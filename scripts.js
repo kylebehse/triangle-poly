@@ -84,6 +84,9 @@ const pointerLight = {
   current: new THREE.Vector2(0.26, 0.28),
   target: new THREE.Vector2(0.26, 0.28),
 };
+const progressOverride = {
+  value: null,
+};
 
 function animate() {
   const elapsed = clock.getElapsedTime();
@@ -97,7 +100,8 @@ function animate() {
   root.rotation.z = -0.38 + Math.sin(elapsed * 0.08) * 0.018;
   animateFormVertices(elapsed);
 
-  const narrowViewport = window.innerWidth < 700;
+  const { width: viewportWidth } = getViewportSize();
+  const narrowViewport = viewportWidth < 700;
   const cameraOrbit = elapsed * 0.06;
   const baseScale = narrowViewport ? 0.62 : 0.82;
   const exitScale = THREE.MathUtils.lerp(1, 0.5, scrollProgress);
@@ -117,8 +121,7 @@ function animate() {
 }
 
 function resize() {
-  const width = window.innerWidth;
-  const height = window.innerHeight;
+  const { width, height } = getViewportSize();
 
   camera.aspect = width / height;
   camera.fov = width < 700 ? 48 : 36;
@@ -131,16 +134,37 @@ function resize() {
 }
 
 function getScrollProgress() {
-  const sceneTop = screwScene ? screwScene.offsetTop : canvas.offsetTop;
-  const scrollStart = sceneTop - window.innerHeight;
-  const scrollEnd = sceneTop + (screwScene ? screwScene.offsetHeight : canvas.offsetHeight);
-  const scrollableDistance = scrollEnd - scrollStart;
+  if (progressOverride.value !== null) {
+    return progressOverride.value;
+  }
+
+  const { start, end } = getScrollRange();
+  const scrollableDistance = end - start;
 
   if (scrollableDistance <= 0) {
     return 0;
   }
 
-  return THREE.MathUtils.clamp((window.scrollY - scrollStart) / scrollableDistance, 0, 1);
+  return THREE.MathUtils.clamp((window.scrollY - start) / scrollableDistance, 0, 1);
+}
+
+function getScrollRange() {
+  const viewportHeight = getViewportSize().height;
+  const sceneTop = screwScene ? screwScene.offsetTop : canvas.offsetTop;
+  const sceneHeight = screwScene ? screwScene.offsetHeight : canvas.offsetHeight;
+
+  return {
+    start: sceneTop - viewportHeight,
+    end: sceneTop + sceneHeight,
+  };
+}
+
+function getViewportSize() {
+  const frameRect = stickyFrame ? stickyFrame.getBoundingClientRect() : null;
+  const width = Math.max(1, Math.round(frameRect?.width || canvas.clientWidth || window.innerWidth));
+  const height = Math.max(1, Math.round(frameRect?.height || canvas.clientHeight || window.innerHeight));
+
+  return { width, height };
 }
 
 function createTwistedTriangularForm() {
@@ -547,6 +571,42 @@ function updatePointerTarget(clientX, clientY) {
     THREE.MathUtils.clamp(clientY / window.innerHeight, 0, 1)
   );
 }
+
+window.trianglePoly = {
+  clearProgress() {
+    progressOverride.value = null;
+  },
+  getProgress() {
+    return getScrollProgress();
+  },
+  getState() {
+    const { start, end } = getScrollRange();
+    const { width, height } = getViewportSize();
+
+    return {
+      progress: getScrollProgress(),
+      scrollY: window.scrollY,
+      rangeStart: start,
+      rangeEnd: end,
+      viewportWidth: width,
+      viewportHeight: height,
+      devicePixelRatio: window.devicePixelRatio,
+      visualViewportWidth: window.visualViewport?.width ?? null,
+      visualViewportHeight: window.visualViewport?.height ?? null,
+      visualViewportScale: window.visualViewport?.scale ?? null,
+    };
+  },
+  scrollToProgress(progress) {
+    progressOverride.value = null;
+
+    const normalizedProgress = THREE.MathUtils.clamp(Number(progress) || 0, 0, 1);
+    const { start, end } = getScrollRange();
+    window.scrollTo(0, start + (end - start) * normalizedProgress);
+  },
+  setProgress(progress) {
+    progressOverride.value = THREE.MathUtils.clamp(Number(progress) || 0, 0, 1);
+  },
+};
 
 window.addEventListener("resize", resize);
 window.addEventListener("pointermove", (event) => {
